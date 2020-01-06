@@ -1,0 +1,30 @@
+# путь к базе
+base_path: "C:\Users\kotov-d\Documents\task#1"
+
+# Конфигурация для feature extractor'а
+###
+# Какой канал обрабатывается:
+# left, right, middle, side
+# пока не поддерживается
+preprocess_types:
+  - logmel
+# Какой признак выделяется:
+# vggish, vggish1, logmel, sff(test)
+# (более подробно про признаки можно описано в файле featureextractor.py)
+feature_type:
+  - pre_sff
+# далее идет описание параметров для извлечения каждого типа фич
+# ----------------
+fft_feature:
+  sr: 16000
+  n_fft: 1024
+  fft_overlap: 512
+mfcc_feature:
+  sr: 16000
+logmel_params:
+  sr: 16000
+  n_fft: 1024
+  hop_length: 512
+  n_mels: 128
+raw_feature:
+  sr: 16000
