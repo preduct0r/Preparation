@@ -1,8 +1,11 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import numpy as np
 import pandas as pd
 
 
-df = pd.read_csv(r"C:\Users\kotov-d\Documents\TASKS\task#7\aff_beh_test.csv")
+df = pd.read_csv(r"C:\Users\kotov-d\Documents\TASKS\task#7\aff_beh_vad.csv")
 df.drop(columns=['Unnamed: 0'], inplace=True)
 
 grouped = df.groupby(by='name')
