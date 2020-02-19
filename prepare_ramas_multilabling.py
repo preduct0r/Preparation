@@ -1,4 +1,4 @@
-from dbbuilders.database import DataBase
+from database import DataBase
 import pandas as pd
 import os
 import pickle
