@@ -1,4 +1,4 @@
-from dbbuilders.database import DataBase
+from database import DataBase
 import pandas as pd
 import os
 import pickle
@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from glob import glob
 import soundfile
 import numpy as np
+from math import modf
 
 
 class Ramaz(DataBase):
@@ -18,7 +19,6 @@ class Ramaz(DataBase):
         self.window_size = window_size
 
     def _collect_base(self):
-        global curr_label
         (
             base_meta_yaml,
             base_descr_file,
@@ -70,9 +70,12 @@ class Ramaz(DataBase):
             emo_info = pd.read_csv(emo_file, sep=',')                       # csvка с мультилейблингом файла
 
             # создаем датафрейм, где будет усредненная информация
-            df = pd.DataFrame(index=sorted(list(set(emo_info['Time']))), columns=base_meta_yaml['extra_labels'])
-            df.fillna(0, inplace=True)
+            delta = modf(emo_info['Time'].iloc[0])[0]
+            round_indexes = [round(x-delta) for x in sorted((emo_info['Time']).unique())]
+            df = pd.DataFrame(data=0, index=round_indexes, columns=base_meta_yaml['extra_labels'])
 
+
+            emo_info['Time'] = [round(x-delta) for x in emo_info['Time']]
             for idx, row in emo_info.iterrows():
                 list2 = [row[1], row[2], row[3], row[4], row[5], row[6], row[7]]
 
@@ -81,17 +84,22 @@ class Ramaz(DataBase):
 
 
             # определим лейбл, который попадет в cur_label и init_label
+            df['curr_label'] = np.nan
             for idx, row in df.iterrows():
-                idx_max = row.iloc[:-1].idxmax()
-                if row.value_counts()[row.value_counts()==row.iloc[:-1].max()].shape[0]>1:
+                idx_max = row.iloc[:-2].idxmax()
+                val_counts = row.iloc[:-2].value_counts()
+                z = row.iloc[:-2].max()
+                if val_counts.loc[row.iloc[:-2].max()]>1:
                     curr_label = 'none'
                 else:
                     curr_label = idx_max
+                df.ix[idx, 'curr_label'] = curr_label
             #=============================================================================================
 
 
             file_path = os.path.join(audio_path, file_name)
             wav_data, sr = soundfile.read(file_path)
+            wav_data = wav_data[int(delta*sr):]
 
 
             # нарезка и формирование разметки
@@ -106,8 +114,8 @@ class Ramaz(DataBase):
                 ffmpeg_command = (
                     r'ffmpeg -ss {} -t {} -i {} -c:a '
                     r'pcm_s16le -ar {} -ac {} {} -loglevel panic'.format(
-                        start,
-                        (end - start),
+                        start+delta,
+                        (end - start)+delta,
                         file_path,
                         target_sample_rate,
                         target_n_channels,
@@ -139,7 +147,7 @@ class Ramaz(DataBase):
             for i in np.arange(0, len(df.index), self.window_size):
                 try:
                     file_id = cut_file(df.index[i], df.index[i + self.window_size], file_id)
-                except:
+                except Exception as e:
                     if df.index[-1]-df.index[i]>1:
                         # print(df.index[i], len(wav_data)/sr)
                         file_id = cut_file(df.index[i], len(wav_data)/sr, file_id)
@@ -164,10 +172,10 @@ class Ramaz(DataBase):
 
 if __name__ == '__main__':
     # путь к Audio данным из папки Data базы Ramaz
-    input_base_path = r'C:\Users\kotov-d\Documents\BASES\RAMAS\ramaz_audio_data'
+    input_base_path = r'C:\Users\preductor\Documents\ramaz_audio_data'
 
     # именно здесь появится папка с новой подготовленной базой
-    output_base_path = r'C:\Users\kotov-d\Documents\BASES\RAMAS\temp'
+    output_base_path = r'C:\Users\preductor\Documents'
 
     db = Ramaz(input_base_path=input_base_path, output_base_path=output_base_path, window_size=5)
 
