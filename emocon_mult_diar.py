@@ -1,6 +1,7 @@
 from database import DataBase
 import pandas as pd
 import os
+import math
 import pickle
 import fnmatch
 from scipy.io import wavfile
@@ -26,20 +27,21 @@ class Emocon_mult(DataBase):
             meta_file_train,
             meta_file_test,
         ) = self._build_description_dict(sample_rate=8000, n_channels=1,
-                    extra_labels = ['arousal','valence',"happiness","anger","sadness", "surprise", "disgust"])
+                    extra_labels = ["arousal","valence","cheerful","happy","angry","nervous","sad","arvalmix"])
 
 
         audio_path = os.path.join(self.input_base_path, 'debate_audios')
-        annotations_path = os.path.join(self.input_base_path, 'additional', 'new_annotations')
+        annotations_path = os.path.join(self.input_base_path, 'emotion_annotations', 'self_annotations')
         target_sample_rate = base_meta_yaml['data_properties']['sample_rate']
         target_n_channels = base_meta_yaml['data_properties']['n_channels']
+        dictors_time = os.path.join(self.input_base_path, 'additional', 'dictors_time_sec')
 
         # имена столбцов в будущей разметке
         col_names = [
                         'ids',
                         'init_name',
                         'cur_name',
-                        'init_label',
+                        'speaker',
                         'cur_label',
                         'database',
                         'begin',
@@ -48,12 +50,12 @@ class Emocon_mult(DataBase):
 
 
         labels_counter = {
-            "anger": 0,
-            "neutrality": 0,
-            "sadness": 0,
-            "happiness": 0,
-            "disgust": 0,
-            "surprise": 0,
+            "angry": 0,
+            "sad": 0,
+            "happy": 0,
+            "cheerful": 0,
+            "nervous": 0,
+            "neutral": 0
         }
         # теперь уже начинаем обрабатывать нашу базу
         file_id = 0
@@ -61,32 +63,57 @@ class Emocon_mult(DataBase):
         train_ids, test_ids = [], []
         raw_meta_data = []
 
+        def class_define(arousal, valence):
+            dict_change = {1:-1, 2:-1, 3:0, 4:1, 5:1}
+            ar, val = dict_change[int(arousal)], dict_change[int(valence)]
+            dict_class = {(-1,-1):0, (-1,0):1, (0,-1):3, (-1,1):2, (0,0):4, (0,1):5, (1,1):8, (1,0):7, (1,-1):6}
+            return dict_class[(ar, val)]
+
 
         for emo_file in glob(os.path.join(annotations_path, "*")):
-            file_name = os.path.basename(emo_file)[:-4]
+            name = os.path.basename(emo_file)[:-9].lower() + '.'
             wavka = ''
             for wav in os.listdir(audio_path):
-                if file_name in wav:
+                if name in wav:
                     wavka = wav
                     break
+
+            time_df = pd.read_csv(os.path.join(dictors_time, name+'csv'), sep=',')
+            if int(name[1:-1])%2 == 1:
+                time_df = time_df.iloc[:,:2]
+            else:
+                time_df = time_df.iloc[:,2:]
+
+            possible_values = []
+
+            for idx, row in time_df.iterrows():
+                if math.isnan(row[0])==False:
+                    for i in range(int(row[0]), int(row[1])):
+                        if i%5==0:
+                            possible_values.append(i)
+
 
 
             emo_info = pd.read_csv(emo_file, sep=',')                       # csvка с мультилейблингом файла
 
             df = pd.DataFrame(data=0, index=emo_info['seconds'], columns=base_meta_yaml['extra_labels'])
 
-            for idx, row in emo_info.iterrows(): #'arousal','valence',"happiness","anger","sadness", "surprise", "disgust"
-                df.loc[row[0],:] = [row[1], row[2], row[4], row[5], row[7], row[13], row[18]]
+            for idx, row in emo_info.iterrows():
+                df.loc[row[0],:] = [row[1], row[2], row[3], row[4], row[5], row[6], row[7], class_define(row[1], row[2])]
+
+            possible_values = list(set(possible_values) & set(df.index))
+            df = df.loc[possible_values, :]
+
             # ============================================================================================
 
 
             # определим лейбл, который попадет в cur_label и init_label
             df['curr_label'] = np.nan
-            for idx, row in df.iterrows():
-                idx_max = row.iloc[3:8].idxmax()
-                val_counts = row.iloc[:-1].value_counts()
-                if val_counts.loc[row.iloc[:-1].max()]>1:
-                    curr_label = 'neutrality'
+            for idx, row in df.loc[:,["cheerful","happy","angry","nervous","sad"]].iterrows():
+                idx_max = row.idxmax()
+                val_counts = row.value_counts()
+                if val_counts.loc[row.max()]>1:
+                    curr_label = 'neutral'
                 else:
                     curr_label = idx_max
                 df.loc[idx, 'curr_label'] = curr_label
@@ -117,13 +144,15 @@ class Emocon_mult(DataBase):
                         new_wav_name_path,
                     )
                 )
-                raw_meta_data.append([file_id, file_name, new_wav_name, curr_label, curr_label, self.base_name, start, end] +
-                                list(np.mean(df.loc[start:end, base_meta_yaml['extra_labels']], axis=0)))
+                # print()
+                raw_meta_data.append([file_id, wavka, new_wav_name, name[:-1], curr_label, self.base_name, start, end] +
+                                list(df.loc[start, base_meta_yaml['extra_labels']]))
+
                 subprocess.call(ffmpeg_command)
 
 
                 # пригодится, чтобы создать meta_train, meta_test
-                if file_name.startswith('p29') or file_name.startswith('p31'):
+                if name.startswith('p29') or name.startswith('p31'):
                     test_ids.append(file_id)
                 else:
                     train_ids.append(file_id)
@@ -139,11 +168,15 @@ class Emocon_mult(DataBase):
 
 
             # исполняем предыдущую функцию
-            for i in np.arange(0, len(df.index), self.window_size):
-                try:
+            for i in np.arange(0, len(df.index)-2):
+                # try:
+
+                if len(wav_data)/float(sr) > df.index[i] + self.window_size:
                     file_id = cut_file(df.index[i], df.index[i] + self.window_size, file_id)
-                except Exception as e:
-                    pass
+                else:
+                    break
+                # except Exception as e:
+                #     print('Exception from {} to {}'.format(df.index[i], df.index[i] + self.window_size))
 
             # =========================================================================================
 
