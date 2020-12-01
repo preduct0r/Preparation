@@ -34,7 +34,7 @@ class Emocon_mult(DataBase):
         annotations_path = os.path.join(self.input_base_path, 'emotion_annotations', 'self_annotations')
         target_sample_rate = base_meta_yaml['data_properties']['sample_rate']
         target_n_channels = base_meta_yaml['data_properties']['n_channels']
-        dictors_time = os.path.join(self.input_base_path, 'additional', 'dictors_time_sec')
+        dictors_time = os.path.join(self.input_base_path, 'diarisation')
 
         # имена столбцов в будущей разметке
         col_names = [
@@ -141,14 +141,14 @@ class Emocon_mult(DataBase):
                         file_path,
                         target_sample_rate,
                         target_n_channels,
-                        new_wav_name_path,
+                        new_wav_name_path,yaml_meta
                     )
                 )
                 # print()
                 raw_meta_data.append([file_id, wavka, new_wav_name, name[:-1], curr_label, self.base_name, start, end] +
                                 list(df.loc[start, base_meta_yaml['extra_labels']]))
 
-                subprocess.call(ffmpeg_command)
+                subprocess.call(ffmpeg_command, shell=True)
 
 
                 # пригодится, чтобы создать meta_train, meta_test
@@ -197,10 +197,11 @@ class Emocon_mult(DataBase):
 
 if __name__ == '__main__':
     # путь к Audio данным из папки Data базы Ramaz
-    input_base_path = r'C:\Users\preductor\Google_Drive\Ulma'
+    input_base_path = '/home/den/datasets/k_emocon'
 
     # именно здесь появится папка с новой подготовленной базой
-    output_base_path = r'C:\Users\preductor\Documents'
+    output_base_path = '/home/den/datasets/experiments'
+
 
     db = Emocon_mult(input_base_path=input_base_path, output_base_path=output_base_path, window_size=5)
 
