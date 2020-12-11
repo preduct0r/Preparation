@@ -98,7 +98,7 @@ class Ramas(DataBase):
                             new_wav_name_full,
                         )
                     )
-                    subprocess.call(ffmpeg_command)
+                    subprocess.call(ffmpeg_command, shell=True)
 
                     if file_name.startswith('22dec'):
                         test_ids.append(file_id)
@@ -136,10 +136,10 @@ class Ramas(DataBase):
 
 if __name__ == '__main__':
     # путь к базе!!!!
-    input_base_path = r'F:\RAMAS'
+    input_base_path = '/home/den/datasets/ramaz_audio_data'
 
     # именно здесь появится папка с новой подготовленной базой
-    output_base_path = r'F:\ramas_audio'
+    output_base_path = '/home/den/datasets'
 
     db = Ramas(input_base_path, output_base_path, 'ramas')
 

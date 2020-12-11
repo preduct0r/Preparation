@@ -317,7 +317,7 @@ class DataBase(ABC):
             try:
                 self._check_base()
             except CheckBaseError as e:
-                shutil.rmtree(self.output_base_path)
+                # shutil.rmtree(self.output_base_path)
                 raise e
 
         base_descr['pass_tests'] = True
